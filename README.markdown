@@ -1,4 +1,4 @@
-Wireguppy
+# Wireguppy
 Copyright © 2010 Bart Massey
 
 Wireguppy is a ridiculously incomplete command-line PCAP
