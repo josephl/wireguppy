@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
-// print IP address
+// print MAC address
 void print_ether() {
     int i;
     printf("%02x", getchar());
@@ -67,7 +67,7 @@ int show_ip() {
     int i, length;
     (void) get16();
     length = get16();
-    printf("IP: length %d\n", length);
+    printf("IPv4: length %d\n", length);
     for (i = 0; i < length - 4; i++)
         (void) getchar();
     return length;
@@ -75,8 +75,9 @@ int show_ip() {
 
 void show_payload(int lt) {
     int i;
-    for (i = 0; i < lt; i++)
-        getchar();
+    for (i = 0; i < lt; i++) {
+        printf("%c", getchar());
+    }
 }
 
 int raw_mode = 0;
@@ -100,36 +101,40 @@ int main(int argc, char **argv) {
         assert(argc == 1); // non-raw mode
     }
 
+    // begin pcap global header
     if (!raw_mode) {
         /* XXX Should check link type and
            record snapshot length. */
-        /*for (i = 0; i < 6; i++)
-            printf("h%d: %08x\n", i, get32());
-        printf("\n");*/
         datalink = global_header();
-        if (datalink == 1) 
+        if (datalink == 1)
             printf("Ethernet Protocol\n\n");
     }
 
+    // begin packet header
     while (1) {
         int lt, ch, paylen;
         if (!raw_mode) {
             /* XXX Should use length information
                in decoding below. */
-            (void) get32();
-            (void) get32();
-            paylen = flip32(get32());
-            printf("paylen: %d (%d)\n", paylen, flip32(get32()));
+            (void) get32(); // ts_sec, time of pcap
+            (void) get32(); // ts_usec microsec of ts_sec
+            paylen = flip32(get32()); // incl_len, #of octest of packet in file
+            printf("paylen: %d (%d)\n", paylen, flip32(get32())); // actual len
         }
+        // begin ethernet 802.3 frame
         printf("src: ");
-        print_ether();  // print IPv6 addr
+        print_ether();
         printf("\n");
         printf("dst: ");
-        print_ether();  // print IPv6 addr
+        print_ether();
         printf("\n");
         lt = decode_length_type();
-        if (lt == 0x0800)
+        if (lt == 0x0800) {     // ipv4 frame
             lt = show_ip();
+        }
+        else if (lt == 0x0806) {    // ARP
+            lt = show_ip();     // TODO: update for ARP
+        }
         else if (lt <= 1500)
             show_payload(lt);
         else
