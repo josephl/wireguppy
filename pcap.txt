@@ -1,0 +1,14 @@
+PCap File Format
+
+Reference: http://wiki.wireshark.org/Development/LibpcapFileFormat
+
+I.  Global Header (32 x 6)
+  0.  Magic Number: 0xa1b2c3d4
+  1.  a.  Version, Major (2)
+      b.  Version, Minor (4)
+  2.  GMT Correction (0)
+  3.  Timestamp sig figs
+  4.  snaplen; Max length of captured packets
+  5.  network; link layer type (1: Ethernet)
+
+

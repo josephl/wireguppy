@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (c) 2012 Joseph Lee
+ * Copyright © 2012 Joseph Lee
  * Also licensed under the "MIT License"
  * CS 494 - Internetworking Protocols
  */
@@ -16,6 +16,9 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+
+int raw_mode = 0;
+int datalink; // datalink type, as per global header
 
 // print MAC address
 void print_ether() {
@@ -64,10 +67,21 @@ int decode_length_type() {
 /* ASSIGNMENT: MODIFY THIS TO PRINT INFORMATION ABOUT
    ENCAPSULATED PAYLOAD. */
 int show_ip() {
-    int i, length;
-    (void) get16();
+    int i, length, buf,
+        ver,  // ip version
+        ihl,  // internet header length
+        dsf,  // ds field
+        ecn;  // ecn
+    buf = get16();
+    ver = buf >> 12;
+    ihl = (buf >> 8) & 0xf;
+    dsf = (buf >> 2) & 0x3f;
+    ecn = buf & 3;
+
+    printf("IPv%d IHL:%d DSField:%d ECN:%d\n", ver, ihl, dsf, ecn);
+
     length = get16();
-    printf("IPv4: length %d\n", length);
+    printf("IP length %d\n", length);
     for (i = 0; i < length - 4; i++)
         (void) getchar();
     return length;
@@ -80,9 +94,6 @@ void show_payload(int lt) {
     }
 }
 
-int raw_mode = 0;
-int datalink; // datalink type, as per global header
-
 
 // Parse and interpret PCap global header
 // return: data link type
@@ -91,7 +102,7 @@ int global_header();
 
 int main(int argc, char **argv) {
 
-    int i;
+    int i, pCount = 1;
 
     // Require 0 or 1 arg: "-r"
     if (argc == 2) {
@@ -107,7 +118,7 @@ int main(int argc, char **argv) {
            record snapshot length. */
         datalink = global_header();
         if (datalink == 1)
-            printf("Ethernet Protocol\n\n");
+            printf("Ethernet 802.3\n\n");
     }
 
     // begin packet header
@@ -119,6 +130,7 @@ int main(int argc, char **argv) {
             (void) get32(); // ts_sec, time of pcap
             (void) get32(); // ts_usec microsec of ts_sec
             paylen = flip32(get32()); // incl_len, #of octest of packet in file
+            printf("Packet %d\n", pCount++);
             printf("paylen: %d (%d)\n", paylen, flip32(get32())); // actual len
         }
         // begin ethernet 802.3 frame
