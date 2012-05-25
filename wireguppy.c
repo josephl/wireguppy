@@ -5,12 +5,19 @@
  * distribution of this software for license terms.
  */
 
+/*
+ * Copyright (c) 2012 Joseph Lee
+ * Also licensed under the "MIT License"
+ * CS 494 - Internetworking Protocols
+ */
+
 /* Decode captured packet stream */
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
+// print IP address
 void print_ether() {
     int i;
     printf("%02x", getchar());
@@ -73,22 +80,37 @@ void show_payload(int lt) {
 }
 
 int raw_mode = 0;
+int datalink; // datalink type, as per global header
+
+
+// Parse and interpret PCap global header
+// return: data link type
+int global_header();
+
 
 int main(int argc, char **argv) {
+
     int i;
+
+    // Require 0 or 1 arg: "-r"
     if (argc == 2) {
         assert(!strcmp(argv[1], "-r"));
-        raw_mode = 1;
+        raw_mode = 1; // raw-mode enabled
     } else {
-        assert(argc == 1);
+        assert(argc == 1); // non-raw mode
     }
+
     if (!raw_mode) {
         /* XXX Should check link type and
            record snapshot length. */
-        for (i = 0; i < 6; i++)
+        /*for (i = 0; i < 6; i++)
             printf("h%d: %08x\n", i, get32());
-        printf("\n");
+        printf("\n");*/
+        datalink = global_header();
+        if (datalink == 1) 
+            printf("Ethernet Protocol\n\n");
     }
+
     while (1) {
         int lt, ch, paylen;
         if (!raw_mode) {
@@ -100,10 +122,10 @@ int main(int argc, char **argv) {
             printf("paylen: %d (%d)\n", paylen, flip32(get32()));
         }
         printf("src: ");
-        print_ether();
+        print_ether();  // print IPv6 addr
         printf("\n");
         printf("dst: ");
-        print_ether();
+        print_ether();  // print IPv6 addr
         printf("\n");
         lt = decode_length_type();
         if (lt == 0x0800)
@@ -126,4 +148,31 @@ int main(int argc, char **argv) {
         printf("\n");
     }
     return 0;
+}
+
+
+int global_header() {
+
+    int temp;
+
+    // h0 - magic number
+    temp = get32();
+    assert(temp == 0xd4c3b2a1); // pcap magic number
+
+    // h1 - PCap format version (2.4)
+    printf("PCap Format Version %d.", get16() >> 8);
+    printf("%d\n", get16() >> 8);
+
+    // h2 - GMT to local correction
+    (void) get32();
+
+    // h3 - timestamp sig figs
+    (void) get32();
+
+    // h4 - snaplen
+    (void) get32();
+
+    // h5 - datalink type (1: ethernet)
+    return get32() >> 24;
+
 }
