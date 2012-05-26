@@ -20,6 +20,14 @@
 int raw_mode = 0;
 int datalink; // datalink type, as per global header
 
+
+struct {
+    int ver, ihl, dsf, ecn, len,
+        id, flags, frag,
+        ttl, protcl, checksum,
+        src[4], dest[4];
+} ipv4_hdr;
+
 // print MAC address
 void print_ether() {
     int i;
@@ -67,24 +75,53 @@ int decode_length_type() {
 /* ASSIGNMENT: MODIFY THIS TO PRINT INFORMATION ABOUT
    ENCAPSULATED PAYLOAD. */
 int show_ip() {
-    int i, length, buf,
-        ver,  // ip version
-        ihl,  // internet header length
-        dsf,  // ds field
-        ecn;  // ecn
+    int i, buf;
+
     buf = get16();
-    ver = buf >> 12;
-    ihl = (buf >> 8) & 0xf;
-    dsf = (buf >> 2) & 0x3f;
-    ecn = buf & 3;
+    ipv4_hdr.ver = buf >> 12;
+    ipv4_hdr.ihl = (buf >> 8) & 0xf;
+    ipv4_hdr.dsf = (buf >> 2) & 0x3f;
+    ipv4_hdr.ecn = buf & 3;
 
-    printf("IPv%d IHL:%d DSField:%d ECN:%d\n", ver, ihl, dsf, ecn);
+    assert(ipv4_hdr.ihl >= 5 && ipv4_hdr.ver == 4);
+    printf("IPv%d IHL:%d DSField:%d ECN:%d\n", ipv4_hdr.ver, ipv4_hdr.ihl,
+            ipv4_hdr.dsf, ipv4_hdr.ecn);
+    ipv4_hdr.len = get16();
+    printf("IP length %d\n", ipv4_hdr.len);
 
-    length = get16();
-    printf("IP length %d\n", length);
-    for (i = 0; i < length - 4; i++)
+    buf = get32();  // identification, flags, fragment offset
+    printf("Identification: %d\nFlags: %d\nFragment Offset: %d\n",
+            (buf >> 16) & 0xffff, (buf >> 13) & 7, buf & 0x1fff);
+
+    buf = get32();  // ttl, protocol, header checksum
+    ipv4_hdr.ttl = (buf >> 24) & 0xff;
+    ipv4_hdr.protcl = (buf >> 16) & 0xff;
+    ipv4_hdr.checksum = (buf >> 8) & 0xffff;
+    printf("TTL: %d\n", ipv4_hdr.ttl);
+    printf("Protocol: ");
+    if (ipv4_hdr.protcl == 6)
+        printf("TCP\n");
+    else if (ipv4_hdr.protcl == 17)
+        printf("UDP\n");
+    printf("Header Checksum: %d\n", ipv4_hdr.checksum);
+
+    buf = get32(); // source
+    printf("Source IP: %d.%d.%d.%d\n",
+            (buf >> 24) & 0xff,
+            (buf >> 16) & 0xff,
+            (buf >> 8) & 0xff,
+            buf & 0xff);
+    buf = get32(); // destination
+    printf("Destination IP: %d.%d.%d.%d\n",
+            (buf >> 24) & 0xff,
+            (buf >> 16) & 0xff,
+            (buf >> 8) & 0xff,
+            buf & 0xff);
+
+    // IP packet payload
+    for (i = 0; i < ipv4_hdr.len - ipv4_hdr.ihl * 4; i++)
         (void) getchar();
-    return length;
+    return ipv4_hdr.len;
 }
 
 void show_payload(int lt) {
@@ -124,13 +161,13 @@ int main(int argc, char **argv) {
     // begin packet header
     while (1) {
         int lt, ch, paylen;
+        printf("Packet %d\n", pCount++);
         if (!raw_mode) {
             /* XXX Should use length information
                in decoding below. */
             (void) get32(); // ts_sec, time of pcap
             (void) get32(); // ts_usec microsec of ts_sec
             paylen = flip32(get32()); // incl_len, #of octest of packet in file
-            printf("Packet %d\n", pCount++);
             printf("paylen: %d (%d)\n", paylen, flip32(get32())); // actual len
         }
         // begin ethernet 802.3 frame
