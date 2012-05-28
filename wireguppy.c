@@ -7,9 +7,89 @@
 
 /* Decode captured packet stream */
 
+/*
+ * Copyright © 2012 Joseph Lee <josephl@cs.pdx.edu>
+ * Available under the MIT License
+ * Wireguppy - CS 494 Assignment 1
+ */
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+
+typedef u_int32_t uint32;
+typedef u_int16_t uint16;
+typedef u_int8_t uint8;
+
+// IPv4 address
+typedef struct {
+    uint8  oct[4];
+} ip_addr;
+
+// global pcap header
+typedef struct {
+    uint32  magic;
+    uint16  ver_maj,
+            ver_min;
+    int     this_zone;
+    uint32  sigfigs,
+            snaplen,
+            network;
+} pcap_h;
+
+// pcap record header
+typedef struct {
+    uint32  sec,
+            usec,
+            in_len,
+            len;
+} pcap_rec_h;
+
+// ethernet header
+typedef struct {
+    uint8   dst_eth[6],
+            src_eth[6];
+    uint16  len_type;
+} eth_h;
+
+// ipv4 header
+typedef struct {
+    uint8   vhl; // ver = vhl >> 4 & 0xf; ihl = vhl 0xf
+    uint8   dsf_ecn; // dsf: dsf_ecn >> 2 & 0x3f; ecn: dsf_ecn 0x3
+    uint16  len,
+            id,
+            flag_off;
+    uint8   ttl,
+            protcl;
+    uint16  check;
+    ip_addr src_ip,
+            dst_ip;
+} ip_h;
+#define IP_VER(ip) (((ip->vhl) >> 4) & 0xf)
+#define IP_HL(ip) ((ip->vhl) & 0xf)
+
+// tcp header
+typedef struct {
+    uint16  src_port,
+            dst_port;
+    uint32  seq,
+            ack;
+    uint8   hl_resv;
+    uint8   flags;
+    uint16  win,
+            check,
+            urg_p;
+} tcp_h;
+#define T_FIN 0x01
+#define T_SYN 0x02
+#define T_RST 0x04
+#define T_PSH 0x08
+#define T_ACK 0x10
+#define T_URG 0x20
+#define T_ECE 0x40
+#define T_CWR 0x80
+#define T_FLAGS (T_FIN|T_SYN|T_RST|T_PSH|T_ACK|T_URG|T_ECE|T_CWR)
 
 void print_ether() {
     int i;
@@ -74,8 +154,16 @@ void show_payload(int lt) {
 
 int raw_mode = 0;
 
+pcap_h *global_header();
+
+
 int main(int argc, char **argv) {
     int i;
+
+    pcap_h *h;
+    h = global_header();
+    printf("%d!!!!\n", h->magic);
+
     if (argc == 2) {
         assert(!strcmp(argv[1], "-r"));
         raw_mode = 1;
@@ -126,4 +214,15 @@ int main(int argc, char **argv) {
         printf("\n");
     }
     return 0;
+}
+
+
+pcap_h *global_header() {
+
+    pcap_h *header;
+    header = (pcap_h *) malloc(sizeof(pcap_h));
+
+    bzero((void *) header, sizeof(pcap_h));
+
+    return header;
 }
