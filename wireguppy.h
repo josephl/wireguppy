@@ -38,13 +38,13 @@ typedef struct {
 
 // ipv4 header
 typedef struct {
-    uint8   vhl; // ver = vhl >> 4 & 0xf; ihl = vhl 0xf
-    uint8   dsf_ecn; // dsf: dsf_ecn >> 2 & 0x3f; ecn: dsf_ecn 0x3
-    uint16  len,
-            id,
-            flag_off;
-    uint8   ttl,
-            protcl;
+    uint8   vhl;
+    uint8   dsf_ecn;
+    uint16  len;
+    uint16  id;
+    uint16  flag_off;
+    uint8   ttl;
+    uint8   protcl;
     uint16  check;
     ip_addr src_ip,
             dst_ip;
@@ -54,15 +54,15 @@ typedef struct {
 
 // tcp header
 typedef struct {
-    uint16  src_port,
-            dst_port;
-    uint32  seq,
-            ack;
-    uint8   hl_resv;
-    uint8   flags;
-    uint16  win,
-            check,
-            urg_p;
+    uint16  t_sport,
+            t_dport;
+    uint32  t_seq,
+            t_ack;
+    uint8   t_hl_resv;
+    uint8   t_flags;
+    uint16  t_win,
+            t_check,
+            t_urg_p;
 } tcp_h;
 #define T_FIN 0x01
 #define T_SYN 0x02
@@ -94,6 +94,12 @@ int get16(void) {
     int b2 = getchar();
     return ((b1 << 8) & 0xff00) | (b2 & 0xff);
 }
+int get16a(void) {
+    int b1 = getchar();
+    int b2 = getchar();
+    return ((b2 << 8) & 0xff00) | (b1 & 0xff);
+}
+
 
 int get32(void) {
     int b1 = getchar();
@@ -199,6 +205,58 @@ eth_h *ethernet_header() {
     temp = (header->len_type & 0xff) << 8;
     temp |= ((header->len_type & 0xff00) >> 8) & 0xff;
     header->len_type = temp;
+
+    return header;
+}
+
+// populate ip header
+ip_h* ip_header() {
+    int i;
+    ip_h *header;
+    uint16 *ptr;
+
+    header = (ip_h *)malloc(sizeof(ip_h));
+    ptr = (uint16 *) header;
+
+    for (i = 0; i < 10; i++, ptr++) {
+        if (i % 2 == 0)
+            *ptr = get16a();
+        else
+            *ptr = get16();
+    }
+
+    return header;
+}
+
+
+udp_h* udp_header() {
+    int i;
+    udp_h *header;
+
+    uint16 *ptr;
+    header = (udp_h *)malloc(sizeof(udp_h));
+    ptr = (uint16 *) header;
+
+    for (i = 0; i < 4; ++i, ptr++)
+        *ptr = get16();
+
+    return header;
+}
+
+// populate tcp header
+tcp_h* tcp_header() {
+    int i;
+    tcp_h *header;
+    uint16 *ptr;
+    header = (tcp_h *)malloc(sizeof(tcp_h));
+    ptr = (uint16 *) header;
+
+    for (i = 0; i < 10; i++, ptr++) {
+        if (i < 5)
+            *ptr = (uint16)get16();
+        else
+            *ptr = (uint16)get16a();
+    }
 
     return header;
 }
