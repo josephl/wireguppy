@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define WORD_LEN 4  // length of word, in bytes
+#define ETH_HLEN 14 // length of ethernet header
+#define ETH_TCP_T 6
+#define ETH_UDP_T 17
+#define UDP_HLEN 8
+
 typedef u_int32_t uint32;
 typedef u_int16_t uint16;
 typedef u_int8_t uint8;
@@ -64,6 +70,7 @@ typedef struct {
             t_check,
             t_urg_p;
 } tcp_h;
+#define T_HL(tcp) (((tcp->t_hl_resv) >> 4) & 0xf)
 #define T_FIN 0x01
 #define T_SYN 0x02
 #define T_RST 0x04
@@ -94,7 +101,7 @@ int get16(void) {
     int b2 = getchar();
     return ((b1 << 8) & 0xff00) | (b2 & 0xff);
 }
-int get16a(void) {
+int get16r(void) {
     int b1 = getchar();
     int b2 = getchar();
     return ((b2 << 8) & 0xff00) | (b1 & 0xff);
@@ -220,7 +227,7 @@ ip_h* ip_header() {
 
     for (i = 0; i < 10; i++, ptr++) {
         if (i % 2 == 0)
-            *ptr = get16a();
+            *ptr = get16r();
         else
             *ptr = get16();
     }
@@ -228,7 +235,7 @@ ip_h* ip_header() {
     return header;
 }
 
-
+// populate udp header
 udp_h* udp_header() {
     int i;
     udp_h *header;
@@ -255,7 +262,7 @@ tcp_h* tcp_header() {
         if (i < 5)
             *ptr = (uint16)get16();
         else
-            *ptr = (uint16)get16a();
+            *ptr = (uint16)get16r();
     }
 
     return header;
