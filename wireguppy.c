@@ -80,11 +80,6 @@ int main(int argc, char **argv) {
             for (i = 1; i < 4; i++)
                 printf(".%d", ip_hdr->src_ip.oct[i]);
             printf("\n  ttl: %d\n", ip_hdr->ttl);
-            printf("  protocol: ");
-            if (ip_hdr->protcl == 6)
-                printf("TCP\n");
-            else if (ip_hdr->protcl == 17)
-                printf("UDP\n");
         }
         else if (eth_hdr->len_type <= 1500) {  // vlan payload
             show_payload(ip_hdr->len);
@@ -112,13 +107,17 @@ int main(int argc, char **argv) {
             paylen = ip_hdr->len \
                      - (IP_HL(ip_hdr) * WORD_LEN) - 8;
         }
-        payload = (char *) malloc(sizeof(char) * (paylen + 1 ));
+        payload = (char *) malloc(sizeof(char) * (paylen + 1));
         pad = packet_hdr->in_len - ETH_HLEN - ip_hdr->len;
         // flush payload
         for (i = 0; i < paylen; i++)
             payload[i] = getchar();
         payload[paylen] = '\0';
-        printf("\npayload[%d]:\n%s\n", paylen, payload);
+        /* check for DNS packet */
+       if (!check_dns(udp_hdr, payload)) {
+           (void) check_tcp(tcp_hdr);
+           printf("\npayload length: %d\n%s\n", paylen, payload);
+       }
         if (!raw_mode) {
             for (i = 0; i < pad; i++)
                 printf("pad%d: %02x\n", i, getchar() & 0xff);

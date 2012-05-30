@@ -259,3 +259,53 @@ tcp_h* tcp_header() {
 
     return header;
 }
+
+
+int check_dns(udp_h *h, char *payload) {
+    char *ptr;
+    char hostname[257]; // domain name max length, RFC 1035, 1123, 2181
+    int i;
+
+    if (!h)
+        return 0;
+    if (h->u_sport != 53 && h->u_dport != 53)
+        return 0;
+
+    printf("DNS protocol, transaction #: 0x%04x\nType: ", *(uint16 *)payload);
+    if (payload[3] & 0x80)
+        printf("Response: ");
+    else
+        printf("Query: ");
+    ptr = &payload[13];
+    strcpy(hostname, ptr);
+    for (i = 0; i < strlen(hostname); i++) {
+        if (hostname[i] > 0 && hostname[i] < 6)
+            hostname[i] = '.';
+    }
+    printf("%s", hostname);
+    if (payload[3] & 0x80) {    // request, print IPv4 address
+        ptr = &payload[13 + strlen(hostname) + 17];
+        printf(" (%u.%u.%u.%u)", (uint8) *ptr, (uint8)*(ptr + 1), (uint8)*(ptr + 2), (uint8)*(ptr + 3));
+    }
+    printf("\n");
+    return 1;
+}
+
+int check_tcp(tcp_h *h) {
+    if (!h)
+        return 0;
+
+    printf("TCP frame: ");
+    if (h->t_flags & T_SYN)
+        printf("SYN");
+    if (h->t_flags & T_ACK) {
+        if (h->t_flags & T_SYN)
+            printf("/");
+        printf("ACK");
+        printf(": 0x%08x", h->t_ack);
+    }
+    if (h->t_seq)
+        printf(", Sequence: %d\n", h->t_seq);
+
+    return 1;
+}
