@@ -11,6 +11,13 @@ typedef u_int32_t uint32;
 typedef u_int16_t uint16;
 typedef u_int8_t uint8;
 
+int ip_header();
+int ip6_header();
+void ethernet_header(int);
+void udp_header();
+void tcp_header(unsigned int);
+void check_dns(char *);
+
 // IPv4 address
 typedef struct {
     uint8  oct[4];
@@ -60,8 +67,8 @@ typedef struct {
     ip_addr src_ip,
             dst_ip;
 } ip_h;
-#define IP_VER(ip) (((ip->vhl) >> 4) & 0xf)
-#define IP_HL(ip) ((ip->vhl) & 0xf)
+#define IP_VER(ip) (((ip.vhl) >> 4) & 0xf)
+#define IP_HL(ip) ((ip.vhl) & 0xf)
 
 // ipv6 header
 typedef struct {
@@ -86,7 +93,7 @@ typedef struct {
             t_check,
             t_urg_p;
 } tcp_h;
-#define T_HL(tcp) (((tcp->t_hl_resv) >> 4) & 0xf)
+#define T_HL(tcp) (((tcp.t_hl_resv) >> 4) & 0xf)
 #define T_FIN 0x01
 #define T_SYN 0x02
 #define T_RST 0x04
@@ -150,7 +157,7 @@ int decode_length_type() {
         printf("VLAN: %04x\n", get16());
         length_type = get16();
     }
-    printf("length/type: %04x\n", length_type);
+    // printf("length/type: %04x\n", length_type);
     return length_type;
 }
 
@@ -193,84 +200,156 @@ pcap_h *global_header() {
     return header;
 }
 
-// populate packet (record) header
-pcap_rec_h *packet_header() {
-    pcap_rec_h *header;
+/* populate packet (record) header
+ */
+pcap_rec_h* packet_header() {
+    pcap_rec_h *hdr;
+    hdr = (pcap_rec_h *) malloc(sizeof(pcap_rec_h));
 
-    header = (pcap_rec_h *) malloc(sizeof(pcap_rec_h));
+    hdr->sec = (uint32)get32();
+    hdr->usec = (uint32)get32();
+    hdr->in_len = (uint32)flip32(get32());
+    hdr->len = (uint32)flip32(get32());
 
-    header->sec = (uint32)get32();
-    header->usec = (uint32)get32();
-    header->in_len = (uint32)flip32(get32());
-    header->len = (uint32)flip32(get32());
-    return header;
+    return hdr;
 }
 
 
-// populate ethernet header (14 bytes)
-eth_h *ethernet_header() {
-    eth_h *header;
-    header = (eth_h *)malloc(sizeof(eth_h));
+// obtain ethernet state from stdin
+void ethernet_header(int pkt_len) {
+    int i,
+        pad;
+    eth_h hdr;
 
-    int i;
+    /* read from stdin */
     for (i = 0; i < 6; i++)
-        header->dst_eth[i] = (uint8)getchar();
+        hdr.dst_eth[i] = (uint8)getchar();
     for (i = 0; i < 6; i++)
-        header->src_eth[i] = (uint8)getchar();
-    header->len_type = get16();
+        hdr.src_eth[i] = (uint8)getchar();
+    hdr.len_type = (uint16) decode_length_type();
+    pad = pkt_len - 14;     // total pkt length - eth hdr len
 
-    return header;
+    /* print ethernet header info */
+    printf(">>> ethernet frame\ndst: %02x", hdr.dst_eth[0]);
+    for (i = 1; i < 6; i++)
+        printf(":%02x", hdr.dst_eth[i]);
+    printf("\nsrc: %02x", hdr.src_eth[0]);
+    for (i = 1; i < 6; i++)
+        printf(":%02x", hdr.src_eth[i]);
+    printf("\nlength/type: %04x\n", hdr.len_type);
+
+    /* determine following frame from len_type */
+    switch(hdr.len_type) {
+        case 0x0800:            // ipv4
+            pad -= ip_header();
+            break;
+        case 0x8dd:             // ipv6
+            pad -= ip6_header();
+            break;
+        case 0x0806:            // arp
+            // TODO: handle arp packet
+            assert(0);
+            break;
+        default:
+            if (hdr.len_type <= 1536) { // length
+                show_payload(hdr.len_type);
+                pad -= hdr.len_type;
+            }
+            else {
+                fprintf(stderr, "undefined ethernet length/type: %04x",
+                        hdr.len_type);
+                // dump payload based on packet length
+                assert(0);
+            }
+            break;
+    }
+    /* padding */
+    if (!raw_mode) {
+        for (i = 0; i < pad; i++)
+            printf("pad%02d: %02x\n", i, getchar());
+    }
 }
 
-// populate ip header
-ip_h* ip_header() {
+
+/* read IPv4 header from stdin
+ * return length of entire IP packet, including header
+ */
+int ip_header() {
     int i;
-    ip_h *header;
-    header = (ip_h *)malloc(sizeof(ip_h));
+    ip_h hdr;
 
-    header->vhl = (uint8)getchar();
-    header->dsf_ecn = (uint8)getchar();
-    header->len = (uint16)get16();
-    header->id = (uint16)get16();
-    header->flag_off = (uint16)get16();
-    header->ttl = (uint8)getchar();
-    header->protcl = (uint8)getchar();
-    header->check = (uint16)get16();
-
+    /* read from stdin, populate header */
+    hdr.vhl = (uint8)getchar();
+    hdr.dsf_ecn = (uint8)getchar();
+    hdr.len = (uint16)get16();
+    hdr.id = (uint16)get16();
+    hdr.flag_off = (uint16)get16();
+    hdr.ttl = (uint8)getchar();
+    hdr.protcl = (uint8)getchar();
+    hdr.check = (uint16)get16();
     for (i = 0; i < 4; i++)
-        header->src_ip.oct[i] = (uint8)getchar();
+        hdr.src_ip.oct[i] = (uint8)getchar();
     for (i = 0; i < 4; i++)
-        header->dst_ip.oct[i] = (uint8)getchar();
+        hdr.dst_ip.oct[i] = (uint8)getchar();
 
-    return header;
+    /* print IPv4 header */
+    printf(">>> IPv4 frame\n");
+    printf("src addr: %u", hdr.src_ip.oct[0]);
+    for (i = 1; i < 4; i++)
+        printf(".%u", hdr.src_ip.oct[i]);
+    printf("\ndst addr: %u", hdr.dst_ip.oct[0]);
+    for (i = 1; i < 4; i++)
+        printf(".%u", hdr.dst_ip.oct[i]);
+    printf("\nlength: %u, id: %u, time-to-live: %u\n",
+            hdr.len, hdr.id, hdr.ttl);
+
+    switch(hdr.protcl) {
+        case 6:     // tcp
+            tcp_header(hdr.len - (IP_HL(hdr) * 4));
+            break;
+        case 17:    // udp
+            udp_header();
+            break;
+        case 4:     // ipv4-in-ipv4 (tunneling)
+            ip_header();
+            break;
+        default:
+            fprintf(stderr, "unknown ipv4 protocol: %u\n", hdr.protcl);
+            assert(0);
+            break;
+    }
+
+    return hdr.len;
 }
 
-// populate ipv6 header
-void ip6_header() {
+/* parse ipv6 header
+ * return full length of ipv6 packet, including header
+ */
+int ip6_header() {
     int i;
-    ip6_h header;
-    header.vdeflow = get32();
-    header.p_len = get16();
-    next_h = getchar();
-    hop_lim = getchar();
+    ip6_h hdr;
+    hdr.vdeflow = get32();      // meh. fix?
+    hdr.p_len = get16();
+    hdr.next_h = getchar();
+    hdr.hop_lim = getchar();
     for (i = 0; i < 8; i++)
-        header.src_6[i] = get16();
+        hdr.src_6.set[i] = get16();
     for (i = 0; i < 8; i++)
-        header.src_6[i] = get16();
+        hdr.src_6.set[i] = get16();
     /* print ipv6 header */
-    printf("IPv6 Header\nsrc: %04x", header.src_6[0]);
+    printf("IPv6 hdr\nsrc: %04x", hdr.src_6.set[0]);
     for (i = 1; i < 8; i++)
-        printf(":%04x", header.src_6[i]);
-    printf("dst: %04x", header.dst_6[0]);
+        printf(":%04x", hdr.src_6.set[i]);
+    printf("dst: %04x", hdr.dst_6.set[0]);
     for (i = 1; i < 8; i++)
-        printf(":%04x", header.dst_6[i]);
+        printf(":%04x", hdr.dst_6.set[i]);
     printf("\npayload length: %d, hop limit: %d\n",\
-            header.p_len, header.hop_len);
-    printf("next header: ");
-    switch(header.next_h) {
+            hdr.p_len, hdr.hop_lim);
+    printf("next hdr: ");
+    switch(hdr.next_h) {
         case 6:     // TCP
             printf("TCP\n");
-            tcp_header();
+            tcp_header(hdr.p_len);
             break;
         case 17:    // UDP
             printf("UDP\n");
@@ -280,49 +359,101 @@ void ip6_header() {
             printf("unknown\n");
             break;
     }
+    return hdr.p_len + 40;
+}
 
 
 // populate udp header
-udp_h* udp_header() {
-    udp_h *header;
-    header = (udp_h *)malloc(sizeof(udp_h));
+void udp_header() {
+    int i;
+    udp_h hdr;
+    char *payload;
+    payload = NULL;
 
-    header->u_sport = (uint16)get16();
-    header->u_dport = (uint16)get16();
-    header->u_len = (uint16)get16();
-    header->u_sum = (uint16)get16();
+    /* read in udp hdr info */
+    hdr.u_sport = (uint16)get16();
+    hdr.u_dport = (uint16)get16();
+    hdr.u_len = (uint16)get16();
+    hdr.u_sum = (uint16)get16();
 
-    return header;
+    /* print udp header info */
+    printf(">>> UDP frame\n");
+    printf("src port: %u\ndst port: %u\n", hdr.u_sport, hdr.u_dport);
+
+    /* get payload */
+    payload = (char *)malloc(sizeof(char) * (hdr.u_len + 1));
+    for (i = 0; i < hdr.u_len; i++)
+        payload[i] = getchar();
+    payload[hdr.u_len] = '\0';
+
+    /* check for DNS packet */
+    if (hdr.u_sport == 53 || hdr.u_dport == 53)
+        check_dns(payload);
+    else
+        printf("payload length: %u\n%s", hdr.u_len, payload);
+
+    if (payload)    // payload length
+        free(payload);
 }
 
-// populate tcp header
-tcp_h* tcp_header() {
-    tcp_h *header;
-    header = (tcp_h *)malloc(sizeof(tcp_h));
+/* read in TCP header, payload
+ * arg: read in length of TCP header, as
+ * TCP frame does not supply payload length
+ */
+void tcp_header(unsigned int ip_len) {
+    int i,
+        paylen;     // payload length
+    tcp_h hdr;
+    char *payload;
+    payload = NULL;
 
-    header->t_sport = (uint16)get16();
-    header->t_dport = (uint16)get16();
-    header->t_seq = (uint32)get32();
-    header->t_ack = (uint32)get32();
-    header->t_hl_resv = (uint8)getchar();
-    header->t_flags = (uint8)getchar();
-    header->t_win = (uint16)get16();
-    header->t_check = (uint16)get16();
-    header->t_urg_p = (uint16)get16();
+    hdr.t_sport = (uint16)get16();
+    hdr.t_dport = (uint16)get16();
+    hdr.t_seq = (uint32)get32();
+    hdr.t_ack = (uint32)get32();
+    hdr.t_hl_resv = (uint8)getchar();
+    hdr.t_flags = (uint8)getchar();
+    hdr.t_win = (uint16)get16();
+    hdr.t_check = (uint16)get16();
+    hdr.t_urg_p = (uint16)get16();
 
-    return header;
+    printf(">>> TCP frame: ");
+
+    /* syn/ack-ness */
+    if (hdr.t_flags & T_SYN)
+        printf("SYN");
+    if (hdr.t_flags & T_ACK) {
+        if (hdr.t_flags & T_SYN)
+            printf("/");
+        printf("ACK");
+        printf(": 0x%08x", hdr.t_ack);
+    }
+    if (hdr.t_seq)
+        printf(", Sequence: %d\n", hdr.t_seq);
+
+    /* read in payload */
+    paylen = ip_len - T_HL(hdr) * 4;
+    // payload = (char *)malloc(sizeof(char) * (ip_len - T_HL(&hdr) * 4 + 1));
+    payload = (char *)malloc(sizeof(char) * paylen + 1);
+    for (i = 0; i < paylen; i++)
+        payload[i] = getchar();
+    payload[paylen] = '\0';
+
+    /* check for DNS packet */
+    if (hdr.t_sport == 53 || hdr.t_dport == 53)
+        check_dns(payload);
+    else
+        printf("payload length: %u\n%s", paylen, payload);
+
+    if (payload)
+        free(payload);
 }
 
 
-int check_dns(udp_h *h, char *payload) {
+void check_dns(char *payload) {
     char *ptr;
     char hostname[257]; // domain name max length, RFC 1035, 1123, 2181
     int i;
-
-    if (!h)
-        return 0;
-    if (h->u_sport != 53 && h->u_dport != 53)
-        return 0;
 
     printf("DNS protocol, transaction #: 0x%04x\nType: ", *(uint16 *)payload);
     if (payload[3] & 0x80)
@@ -331,34 +462,36 @@ int check_dns(udp_h *h, char *payload) {
         printf("Query: ");
     ptr = &payload[13];
     strcpy(hostname, ptr);
+
+    /* replace unprintable delims w/dots in ip addr */
     for (i = 0; i < strlen(hostname); i++) {
         if (hostname[i] > 0 && hostname[i] < 6)
             hostname[i] = '.';
     }
+
     printf("%s", hostname);
     if (payload[3] & 0x80) {    // request, print IPv4 address
         ptr = &payload[13 + strlen(hostname) + 17];
-        printf(" (%u.%u.%u.%u)", (uint8) *ptr, (uint8)*(ptr + 1), (uint8)*(ptr + 2), (uint8)*(ptr + 3));
+        printf(" (%u.%u.%u.%u)",\
+                (uint8) *ptr, (uint8)*(ptr + 1),\
+                (uint8)*(ptr + 2), (uint8)*(ptr + 3));
     }
     printf("\n");
-    return 1;
 }
 
-int check_tcp(tcp_h *h) {
-    if (!h)
-        return 0;
-
-    printf("TCP frame: ");
-    if (h->t_flags & T_SYN)
-        printf("SYN");
-    if (h->t_flags & T_ACK) {
-        if (h->t_flags & T_SYN)
-            printf("/");
-        printf("ACK");
-        printf(": 0x%08x", h->t_ack);
-    }
-    if (h->t_seq)
-        printf(", Sequence: %d\n", h->t_seq);
-
-    return 1;
-}
+// void check_tcp(tcp_h hdr) {
+// 
+//     printf("TCP frame: ");
+//     if (hdr.t_flags & T_SYN)
+//         printf("SYN");
+//     if (hdr.t_flags & T_ACK) {
+//         if (hdr.t_flags & T_SYN)
+//             printf("/");
+//         printf("ACK");
+//         printf(": 0x%08x", hdr.t_ack);
+//     }
+//     if (hdr.t_seq)
+//         printf(", Sequence: %d\n", hdr.t_seq);
+// 
+//     return 1;
+// }
