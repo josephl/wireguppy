@@ -5,7 +5,14 @@
  * distribution of this software for license terms.
  */
 
-/* Decode captured packet stream */
+/* Decode captured packet stream
+ * LibPCAP Version 2.4 capture format
+ *
+ * Handles frame stack:
+ * Ethernet 802.3
+ * IPv4 | IPv6 | IPv4 Tunneling | TODO: ARP
+ * TCP | UDP
+ */
 
 /*
  * Copyright © 2012 Joseph Lee <josephl@cs.pdx.edu>
@@ -21,20 +28,19 @@
 
 
 int main(int argc, char **argv) {
-    int         i,
-                c = 0,      // packet count
-                paylen,     // length of payload
-                ch,
-                pad;        // num of padded bytes (eth)
+    int         c = 0,      // packet count
+                ch;
     pcap_h     *global_hdr; // capture header
     pcap_rec_h *packet_hdr; // packet header
 
+    /* check raw mode flag */
     if (argc == 2) {
         assert(!strcmp(argv[1], "-r"));
         raw_mode = 1;
-    } else {
-        assert(argc == 1);
     }
+    else
+        assert(argc == 1);
+
     if (!raw_mode) {
         /* XXX Should check link type and
            record snapshot length. */
@@ -55,74 +61,6 @@ int main(int argc, char **argv) {
 
         /* populate ethernet header */
         ethernet_header(packet_hdr->in_len);
-
-        /* changed with stateness */
-        // printf("frame: ethernet 802.3\n");
-        // printf("  dst: %02x", eth_hdr->dst_eth[0]);
-        // for (i = 1; i < 6; i++)
-        //     printf(":%02x", eth_hdr->dst_eth[i]);
-        // printf("\n  src: %02x", eth_hdr->src_eth[0]);
-        // for (i = 1; i < 6; i++)
-        //     printf(":%02x", eth_hdr->src_eth[i]);
-        // printf("\n");
-
-        // /* check eth len_type for IP frame protocol */
-        // if (eth_hdr->len_type == 0x0800) {     // ipv4
-        //     ip_hdr = ip_header();
-        //     printf("frame: ipv4\n");
-        //     printf("  dst: %d", ip_hdr->dst_ip.oct[0]);
-        //     for (i = 1; i < 4; i++)
-        //         printf(".%d", ip_hdr->dst_ip.oct[i]);
-        //     printf("\n  src: %d", ip_hdr->src_ip.oct[0]);
-        //     for (i = 1; i < 4; i++)
-        //         printf(".%d", ip_hdr->src_ip.oct[i]);
-        //     printf("\n  ttl: %d\n", ip_hdr->ttl);
-        // }
-        // else if (eth_hdr->len_type == 0x8dd) {  // ipv6
-        //     // TODO: IPv6
-        // }
-        // else if (eth_hdr->len_type <= 1500) {   // vlan payload
-        //     show_payload(ip_hdr->len);
-        //     paylen = eth_hdr->len_type;
-        // }
-        // else {
-        //     fprintf(stderr, "undefined ethernet length/type: %04x\n",
-        //             eth_hdr->len_type);
-        //     assert(0);
-        // }
-        // /* parse ip payload (TCP/UDP) */
-        // if (ip_hdr->protcl == 6) {          // TCP
-        //     udp_hdr = NULL;
-        //     tcp_hdr = tcp_header();
-        //     paylen = ip_hdr->len \
-        //              - (IP_HL(ip_hdr) * WORD_LEN)\
-        //              - (T_HL(tcp_hdr) * WORD_LEN);
-        //     // flush tcp options, if any
-        //     for (i = 0; i < T_HL(tcp_hdr) - 5; i++)
-        //         (void)get32();
-        // }
-        // else if (ip_hdr->protcl == 17) {    // UDP
-        //     tcp_hdr = NULL;
-        //     udp_hdr = udp_header();
-        //     paylen = ip_hdr->len \
-        //              - (IP_HL(ip_hdr) * WORD_LEN) - 8;
-        // }
-        // payload = (char *) malloc(sizeof(char) * (paylen + 1));
-        // pad = packet_hdr->in_len - ETH_HLEN - ip_hdr->len;
-        // // flush payload
-        // for (i = 0; i < paylen; i++)
-        //     payload[i] = getchar();
-        // payload[paylen] = '\0';
-        // /* check for DNS packet */
-        // if (!check_dns(udp_hdr, payload)) {
-        //    (void) check_tcp(tcp_hdr);
-        //    printf("\npayload length: %d\n%s\n", paylen, payload);
-        // }
-        // if (!raw_mode) {
-        //     for (i = 0; i < pad; i++)
-        //         printf("pad%d: %02x\n", i, getchar() & 0xff);
-        // }
-
         /* end loop */
         ch = getchar();
         if (ch == EOF)

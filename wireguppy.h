@@ -112,25 +112,28 @@ typedef struct {
             u_sum;
 } udp_h;
 
-void print_ether() {
-    int i;
-    printf("%02x", getchar());
-    for (i = 1; i < 6; i++)
-        printf(":%02x", getchar());
-}
+// void print_ether() {
+//     int i;
+//     printf("%02x", getchar());
+//     for (i = 1; i < 6; i++)
+//         printf(":%02x", getchar());
+// }
 
+/* compliments of the bart */
 int get16(void) {
     int b1 = getchar();
     int b2 = getchar();
     return ((b1 << 8) & 0xff00) | (b2 & 0xff);
 }
+
+/* reversal of get16() */
 int get16r(void) {
     int b1 = getchar();
     int b2 = getchar();
     return ((b2 << 8) & 0xff00) | (b1 & 0xff);
 }
 
-
+/* compliments of the bart */
 int get32(void) {
     int b1 = getchar();
     int b2 = getchar();
@@ -143,6 +146,7 @@ int get32(void) {
         (b4 & 0xff);
 }
 
+/* compliments of the bart */
 int flip32(int x) {
     return
         ((x >> 24) & 0xff) |
@@ -151,13 +155,13 @@ int flip32(int x) {
         ((x << 24) & 0xff000000);
 }
 
+/* compliments of the bart */
 int decode_length_type() {
     int length_type = get16();
     if (length_type == 0x8100) {
         printf("VLAN: %04x\n", get16());
         length_type = get16();
     }
-    // printf("length/type: %04x\n", length_type);
     return length_type;
 }
 
@@ -230,7 +234,7 @@ void ethernet_header(int pkt_len) {
     pad = pkt_len - 14;     // total pkt length - eth hdr len
 
     /* print ethernet header info */
-    printf(">>> ethernet frame\ndst: %02x", hdr.dst_eth[0]);
+    printf(">>> Ethernet frame\ndst: %02x", hdr.dst_eth[0]);
     for (i = 1; i < 6; i++)
         printf(":%02x", hdr.dst_eth[i]);
     printf("\nsrc: %02x", hdr.src_eth[0]);
@@ -243,7 +247,7 @@ void ethernet_header(int pkt_len) {
         case 0x0800:            // ipv4
             pad -= ip_header();
             break;
-        case 0x8dd:             // ipv6
+        case 0x86dd:             // ipv6
             pad -= ip6_header();
             break;
         case 0x0806:            // arp
@@ -365,7 +369,8 @@ int ip6_header() {
 
 // populate udp header
 void udp_header() {
-    int i;
+    int i,
+        paylen;         // length of udp payload
     udp_h hdr;
     char *payload;
     payload = NULL;
@@ -381,16 +386,17 @@ void udp_header() {
     printf("src port: %u\ndst port: %u\n", hdr.u_sport, hdr.u_dport);
 
     /* get payload */
-    payload = (char *)malloc(sizeof(char) * (hdr.u_len + 1));
-    for (i = 0; i < hdr.u_len; i++)
+    paylen = hdr.u_len - 8;     // udp header always 8 bytes
+    payload = (char *)malloc(sizeof(char) * (paylen + 1));
+    for (i = 0; i < paylen; i++)
         payload[i] = getchar();
-    payload[hdr.u_len] = '\0';
+    payload[paylen] = '\0';
 
     /* check for DNS packet */
     if (hdr.u_sport == 53 || hdr.u_dport == 53)
         check_dns(payload);
     else
-        printf("payload length: %u\n%s", hdr.u_len, payload);
+        printf("payload length: %u\n%s", paylen, payload);
 
     if (payload)    // payload length
         free(payload);
@@ -402,7 +408,8 @@ void udp_header() {
  */
 void tcp_header(unsigned int ip_len) {
     int i,
-        paylen;     // payload length
+        paylen,     // payload length
+        opts;
     tcp_h hdr;
     char *payload;
     payload = NULL;
@@ -417,7 +424,17 @@ void tcp_header(unsigned int ip_len) {
     hdr.t_check = (uint16)get16();
     hdr.t_urg_p = (uint16)get16();
 
-    printf(">>> TCP frame: ");
+    printf(">>> TCP frame\n");
+    printf("src port: %u\n", hdr.t_sport);
+    printf("dst port: %u\n", hdr.t_dport);
+
+    /* tcp header options */
+    opts = T_HL(hdr) - 5;
+    if (opts) {
+        printf("options: 0x%08x\n", get32());
+        for (i = 1; i < opts; i++)
+            printf("         0x%08x\n", get32());
+    }
 
     /* syn/ack-ness */
     if (hdr.t_flags & T_SYN)
@@ -433,6 +450,7 @@ void tcp_header(unsigned int ip_len) {
 
     /* read in payload */
     paylen = ip_len - T_HL(hdr) * 4;
+    printf("TCP payload len: %d\n", paylen);
     // payload = (char *)malloc(sizeof(char) * (ip_len - T_HL(&hdr) * 4 + 1));
     payload = (char *)malloc(sizeof(char) * paylen + 1);
     for (i = 0; i < paylen; i++)
@@ -449,13 +467,14 @@ void tcp_header(unsigned int ip_len) {
         free(payload);
 }
 
-
+/* parse DNS fields */
 void check_dns(char *payload) {
     char *ptr;
     char hostname[257]; // domain name max length, RFC 1035, 1123, 2181
     int i;
 
-    printf("DNS protocol, transaction #: 0x%04x\nType: ", *(uint16 *)payload);
+    printf(">>> DNS protocol\n");
+    printf("transaction #: 0x%04x\n", *(uint16 *)payload);
     if (payload[3] & 0x80)
         printf("Response: ");
     else
