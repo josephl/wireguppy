@@ -1,0 +1,32 @@
+# Wireguppy
+Copyright © 2012 Joseph Lee <josephl@cs.pdx.edu>
+http://github.com/josephl/wireguppy.git
+
+I was able to implement parsing for the following:
+* PCAP global packet header
+* PCAP packet header
+* Ethernet 802.3X header
+* IPv4 (w/options), IPv6, VLAN, IPv4-in-IPv4 headers
+* UDP, TCP (w/header options)
+* DNS packet information
+
+Using tcpdump and wireshark as a reference and consulting the
+TCP/IP Illustrated Vol. 1 text, as well as existing code by
+Professor Bart Massey, the original author of Wireguppy, I was
+able to expand upon Wireguppy by parsing and displaying what I
+chose to be relevent and interesting information.
+
+Documentation, source code, and examples by Tim Carstens and
+Guy Harris, developers of libpcap and tcpdump were referenced
+in constructs and methods. (http://www.tcpdump.org)
+
+Originally, I chose to use structs to read in bytes from stdin
+to parse the header fields, but the endianness of individual
+fields proved to be frustrating, but the structs and macros
+remain.
+
+This program functions as a state machine reading the PCAP file
+from stdin and using telltale values from each header, such as
+protocol type and length to determine the function call for the
+following state.
+

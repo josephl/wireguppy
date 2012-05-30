@@ -1,9 +1,17 @@
 /*
+ * Copyright © 2012 Joseph Lee <josephl@cs.pdx.edu>
+ * Available under the MIT License
+ * Wireguppy - CS 494 Assignment 1
+ * http://github.com/josephl/wireguppy.git
+ */
+
+/* Previous Developer
  * Copyright © 2012 Bart Massey
  * [This program is licensed under the "MIT License"]
  * Please see the file COPYING in the source
  * distribution of this software for license terms.
  */
+
 
 /* Decode captured packet stream
  * LibPCAP Version 2.4 capture format
@@ -12,12 +20,7 @@
  * Ethernet 802.3
  * IPv4 | IPv6 | IPv4 Tunneling | TODO: ARP
  * TCP | UDP
- */
-
-/*
- * Copyright © 2012 Joseph Lee <josephl@cs.pdx.edu>
- * Available under the MIT License
- * Wireguppy - CS 494 Assignment 1
+ * DNS
  */
 
 #include <assert.h>
