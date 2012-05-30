@@ -1,11 +1,11 @@
 
 CC=gcc
-CFLAGS=-g -Wall 
-OUT=-o wireg
+CFLAGS=-g -Wall
+OUT=-o wguppy
 
 all: wireguppy.c
 	$(CC) $(CFLAGS) $(OUT) wireguppy.c
 
 clean:
-	rm wireg
-	rm -rf wireg.*
+	rm wguppy
+	rm -rf wguppy.*

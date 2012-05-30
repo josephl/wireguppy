@@ -70,6 +70,7 @@ int main(int argc, char **argv) {
             printf(":%02x", eth_hdr->src_eth[i]);
         printf("\n");
 
+        /* check eth len_type for IP frame protocol */
         if (eth_hdr->len_type == 0x0800) {     // ipv4
             ip_hdr = ip_header();
             printf("frame: ipv4\n");
@@ -81,7 +82,10 @@ int main(int argc, char **argv) {
                 printf(".%d", ip_hdr->src_ip.oct[i]);
             printf("\n  ttl: %d\n", ip_hdr->ttl);
         }
-        else if (eth_hdr->len_type <= 1500) {  // vlan payload
+        else if (eth_hdr->len_type == 0x8dd) {  // ipv6
+            // TODO: IPv6
+        }
+        else if (eth_hdr->len_type <= 1500) {   // vlan payload
             show_payload(ip_hdr->len);
             paylen = eth_hdr->len_type;
         }

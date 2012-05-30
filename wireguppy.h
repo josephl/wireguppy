@@ -16,6 +16,11 @@ typedef struct {
     uint8  oct[4];
 } ip_addr;
 
+// IPv6 address
+typedef struct {
+    uint16 set[8];
+} ip6_addr;
+
 // global pcap header
 typedef struct {
     uint32  magic;
@@ -57,6 +62,17 @@ typedef struct {
 } ip_h;
 #define IP_VER(ip) (((ip->vhl) >> 4) & 0xf)
 #define IP_HL(ip) ((ip->vhl) & 0xf)
+
+// ipv6 header
+typedef struct {
+    uint32 vdeflow;
+    uint16 p_len;
+    uint8 next_h;
+    uint8 hop_lim;
+    ip6_addr src_6,
+             dst_6;
+} ip6_h;
+#define IP6_VER(ip) (((ip->vdeflow) >> 28) & 0xf)
 
 // tcp header
 typedef struct {
@@ -228,6 +244,43 @@ ip_h* ip_header() {
 
     return header;
 }
+
+// populate ipv6 header
+void ip6_header() {
+    int i;
+    ip6_h header;
+    header.vdeflow = get32();
+    header.p_len = get16();
+    next_h = getchar();
+    hop_lim = getchar();
+    for (i = 0; i < 8; i++)
+        header.src_6[i] = get16();
+    for (i = 0; i < 8; i++)
+        header.src_6[i] = get16();
+    /* print ipv6 header */
+    printf("IPv6 Header\nsrc: %04x", header.src_6[0]);
+    for (i = 1; i < 8; i++)
+        printf(":%04x", header.src_6[i]);
+    printf("dst: %04x", header.dst_6[0]);
+    for (i = 1; i < 8; i++)
+        printf(":%04x", header.dst_6[i]);
+    printf("\npayload length: %d, hop limit: %d\n",\
+            header.p_len, header.hop_len);
+    printf("next header: ");
+    switch(header.next_h) {
+        case 6:     // TCP
+            printf("TCP\n");
+            tcp_header();
+            break;
+        case 17:    // UDP
+            printf("UDP\n");
+            udp_header();
+            break;
+        default:
+            printf("unknown\n");
+            break;
+    }
+
 
 // populate udp header
 udp_h* udp_header() {
