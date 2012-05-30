@@ -1,6 +1,6 @@
 
 CC=gcc
-CFLAGS=-g -Wall -lpcap
+CFLAGS=-g -Wall 
 OUT=-o wireg
 
 all: wireguppy.c

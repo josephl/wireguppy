@@ -161,57 +161,47 @@ int raw_mode = 0;
 // populate global packet header
 pcap_h *global_header() {
 
-    int i;
     pcap_h *header;
-    uint32 *ptr;
 
     header = (pcap_h *) malloc(sizeof(pcap_h));
     bzero((void *) header, sizeof(pcap_h));
-    ptr = (uint32 *) header;
 
-    for (i = 0; i < 6; i++, ptr++)
-        *ptr = get32();
+    header->magic = (uint32)get32();
+    header->ver_maj = (uint16)get16r();
+    header->ver_min = (uint16)get16r();
+    header->this_zone = (uint32)get32();
+    header->sigfigs = (uint32)get32();
+    header->snaplen = (uint32)flip32(get32());
+    header->network = (uint32)get32();
 
     return header;
 }
 
 // populate packet (record) header
 pcap_rec_h *packet_header() {
-    int i;
     pcap_rec_h *header;
-    uint32 *ptr;
 
     header = (pcap_rec_h *) malloc(sizeof(pcap_rec_h));
-    bzero((void *) header, sizeof(pcap_rec_h));
-    ptr = (uint32 *) header;
 
-    for (i = 0; i < 4; i++, ptr++) {
-        if (i < 2)
-            *ptr = get32();
-        else
-            *ptr = flip32(get32());
-    }
-
+    header->sec = (uint32)get32();
+    header->usec = (uint32)get32();
+    header->in_len = (uint32)flip32(get32());
+    header->len = (uint32)flip32(get32());
     return header;
 }
 
 
 // populate ethernet header (14 bytes)
 eth_h *ethernet_header() {
-    int i;
     eth_h *header;
-    uint8 *ptr;
-    uint16 temp;
-
     header = (eth_h *)malloc(sizeof(eth_h));
-    ptr = (uint8 *) header;
 
-    for (i = 0; i < 14; i++, ptr++)
-        *ptr = (uint8)getchar();
-    // switch len_type endian
-    temp = (header->len_type & 0xff) << 8;
-    temp |= ((header->len_type & 0xff00) >> 8) & 0xff;
-    header->len_type = temp;
+    int i;
+    for (i = 0; i < 6; i++)
+        header->dst_eth[i] = (uint8)getchar();
+    for (i = 0; i < 6; i++)
+        header->src_eth[i] = (uint8)getchar();
+    header->len_type = get16();
 
     return header;
 }
@@ -220,50 +210,52 @@ eth_h *ethernet_header() {
 ip_h* ip_header() {
     int i;
     ip_h *header;
-    uint16 *ptr;
-
     header = (ip_h *)malloc(sizeof(ip_h));
-    ptr = (uint16 *) header;
 
-    for (i = 0; i < 10; i++, ptr++) {
-        if (i % 2 == 0)
-            *ptr = get16r();
-        else
-            *ptr = get16();
-    }
+    header->vhl = (uint8)getchar();
+    header->dsf_ecn = (uint8)getchar();
+    header->len = (uint16)get16();
+    header->id = (uint16)get16();
+    header->flag_off = (uint16)get16();
+    header->ttl = (uint8)getchar();
+    header->protcl = (uint8)getchar();
+    header->check = (uint16)get16();
+
+    for (i = 0; i < 4; i++)
+        header->src_ip.oct[i] = (uint8)getchar();
+    for (i = 0; i < 4; i++)
+        header->dst_ip.oct[i] = (uint8)getchar();
 
     return header;
 }
 
 // populate udp header
 udp_h* udp_header() {
-    int i;
     udp_h *header;
-
-    uint16 *ptr;
     header = (udp_h *)malloc(sizeof(udp_h));
-    ptr = (uint16 *) header;
 
-    for (i = 0; i < 4; ++i, ptr++)
-        *ptr = get16();
+    header->u_sport = (uint16)get16();
+    header->u_dport = (uint16)get16();
+    header->u_len = (uint16)get16();
+    header->u_sum = (uint16)get16();
 
     return header;
 }
 
 // populate tcp header
 tcp_h* tcp_header() {
-    int i;
     tcp_h *header;
-    uint16 *ptr;
     header = (tcp_h *)malloc(sizeof(tcp_h));
-    ptr = (uint16 *) header;
 
-    for (i = 0; i < 10; i++, ptr++) {
-        if (i < 5)
-            *ptr = (uint16)get16();
-        else
-            *ptr = (uint16)get16r();
-    }
+    header->t_sport = (uint16)get16();
+    header->t_dport = (uint16)get16();
+    header->t_seq = (uint32)get32();
+    header->t_ack = (uint32)get32();
+    header->t_hl_resv = (uint8)getchar();
+    header->t_flags = (uint8)getchar();
+    header->t_win = (uint16)get16();
+    header->t_check = (uint16)get16();
+    header->t_urg_p = (uint16)get16();
 
     return header;
 }

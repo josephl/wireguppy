@@ -22,7 +22,7 @@
 
 int main(int argc, char **argv) {
     int         i,
-                c,          // packet count
+                c = 0,      // packet count
                 paylen,     // length of payload
                 ch,
                 pad;        // num of padded bytes (eth)
@@ -110,22 +110,15 @@ int main(int argc, char **argv) {
             tcp_hdr = NULL;
             udp_hdr = udp_header();
             paylen = ip_hdr->len \
-                     - (IP_HL(ip_hdr) * WORD_LEN) - 20;
+                     - (IP_HL(ip_hdr) * WORD_LEN) - 8;
         }
         payload = (char *) malloc(sizeof(char) * (paylen + 1 ));
         pad = packet_hdr->in_len - ETH_HLEN - ip_hdr->len;
         // flush payload
-        if (tcp_hdr) {
-            for (i = 0; i < paylen; i++)
-                payload[i] = getchar();
-        }
-        else if (udp_hdr) {
-            for (i = 0; i < ip_hdr->len \
-                    - (IP_HL(ip_hdr) * WORD_LEN) - 8; i++)
-                payload[i] = getchar();
-        }
+        for (i = 0; i < paylen; i++)
+            payload[i] = getchar();
         payload[paylen] = '\0';
-        printf("\npayload:\n%s\n", payload);
+        printf("\npayload[%d]:\n%s\n", paylen, payload);
         if (!raw_mode) {
             for (i = 0; i < pad; i++)
                 printf("pad%d: %02x\n", i, getchar() & 0xff);
@@ -140,7 +133,8 @@ int main(int argc, char **argv) {
         /* deallocate memory */
         free(packet_hdr);
         free(eth_hdr);
-        free(ip_hdr);
+        if(ip_hdr)
+            free(ip_hdr);
         if(payload)
             free(payload);
         if (tcp_hdr)
